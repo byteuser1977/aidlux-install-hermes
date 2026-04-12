@@ -1077,13 +1077,17 @@ copy_config_templates() {
     if [ ! -f "$HERMES_HOME/.env" ]; then
         if [ -f "$INSTALL_DIR/.env.example" ]; then
             cp "$INSTALL_DIR/.env.example" "$HERMES_HOME/.env"
-            log_success "Created ~/.hermes/.env from template"
+            chmod +x "$HERMES_HOME/.env"
+            log_success "Created ~/.hermes/.env from template with executable permissions"
         else
             touch "$HERMES_HOME/.env"
-            log_success "Created ~/.hermes/.env"
+            chmod +x "$HERMES_HOME/.env"
+            log_success "Created ~/.hermes/.env with executable permissions"
         fi
     else
-        log_info "~/.hermes/.env already exists, keeping it"
+        # Ensure existing .env has executable permissions
+        chmod +x "$HERMES_HOME/.env"
+        log_info "~/.hermes/.env already exists, ensuring executable permissions"
     fi
 
     # Create config.yaml at ~/.hermes/config.yaml (top level, easy to find)
