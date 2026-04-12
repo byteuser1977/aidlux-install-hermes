@@ -1,7 +1,5 @@
 # AidLux Hermes Agent Installation Guide
 
-**Language**: [English](README.md) | [中文](README_CN.md)
-
 **Date**: 2026-04-12
 **Environment**: AidLux / OpenClaw Termux (Ubuntu 20.04, arm64)
 **Version**: v1.0
@@ -10,7 +8,7 @@
 
 ## 📋 Project Overview
 
-This project provides a solution for one-click installation of Hermes Agent in the AidLux environment, optimized for the specific characteristics of AidLux/OpenClaw Termux environment, addressing issues such as virtual environment creation failure, Python version compatibility, and environment variable configuration.
+This project provides a solution for installing Hermes Agent in the AidLux environment, optimized for the specific characteristics of AidLux/OpenClaw Termux environment, addressing issues such as virtual environment creation failure, Python version compatibility, and environment variable configuration.
 
 ### Key Features
 
@@ -60,7 +58,7 @@ hermes setup
 cd /home/aidlux/.openclaw/workspace
 
 # 2. Download the script
-curl -LsSf -o aidinstall.sh https://raw.githubusercontent.com/byteuser1977/aidlux-install-hermes/main/script/aidinstall.sh
+curl -fsSL -o aidinstall.sh https://raw.githubusercontent.com/byteuser1977/aidlux-install-hermes/main/script/aidinstall.sh
 
 # 3. Give execution permission
 chmod +x aidinstall.sh
@@ -163,64 +161,6 @@ Apply these variables in the current session to make `hermes` immediately availa
 
 ---
 
-## ⚠️ Common Issues
-
-### Q1: What to do if installation fails?
-
-Check logs:
-```bash
-# Check installation output
-# Or retry
-cd /home/aidlux/.openclaw/workspace
-./aidlinstall.sh
-```
-
-### Q2: `hermes: command not found`
-
-Verify:
-```bash
-ls ~/.local/bin/hermes
-echo $PATH | grep ~/.local/bin
-source ~/.bashrc
-```
-
-### Q3: Python module import error
-
-Verify `PYTHONPATH` is set:
-```bash
-echo $PYTHONPATH
-# Should show: /home/aidlux/.hermes/.deps:...
-```
-
-Set manually (temporary):
-```bash
-export PYTHONPATH="$HOME/.hermes/.deps:$PYTHONPATH"
-```
-
-### Q4: Node.js not available
-
-Verify:
-```bash
-~/.hermes/node/bin/node --version
-```
-
-If missing, re-run step 3:
-```bash
-cd ~/.hermes/hermes-agent
-~/.hermes/node/bin/npm install
-```
-
-### Q5: Need to uninstall and reinstall
-
-```bash
-rm -rf ~/.hermes
-rm -f ~/.local/bin/hermes
-# Remove Hermes-related lines from ~/.bashrc
-./aidlinstall.sh
-```
-
----
-
 ## 📁 Post-installation Directory Structure
 
 ```
@@ -293,32 +233,16 @@ uv pip install --python 3.11 -r requirements.txt --target ~/.hermes/.deps --upgr
 
 ---
 
-## 📚 Technical Details
+## 📚 Environment Information
 
-### Why use target mode?
-
-AidLux's filesystem may be mounted with `noexec` or permission restrictions, causing virtual environment hard link operations to fail. Using `UV_LINK_MODE=copy` and `--target` mode avoids these issues, with dependencies directly copied to `~/.hermes/.deps` and made available via `PYTHONPATH`.
-
-### Why modify shebang?
-
-Hermes uses Python 3.10+ syntax (such as `Path | None` union types), which cannot be parsed by system Python 3.8. It's essential to ensure the entry point uses Python 3.11.
-
-### Why skip virtual environment?
-
-virtualenv may fail in restricted environments (like some Android/Linux containers) due to permissions, noexec mount options, or kernel restrictions. Target mode is more robust and suitable for containerized/restricted environments.
-
----
-
-## 📄 Related Documents
-
-| Document | Description | Location |
-|----------|-------------|----------|
-| `Installation-Guide.md` | Complete installation guide | `docs/` |
-| `FAQ.md` | Frequently asked questions and solutions | `docs/` |
-| `aidinstall.sh` | One-click installation script | `script/` |
-| `README_CN.md` | Chinese version of this document | `./` |
-| `Installation-Guide_CN.md` | Chinese installation guide | `docs/` |
-| `FAQ_CN.md` | Chinese FAQ | `docs/` |
+| Item | Value |
+|------|-------|
+| Operating System | Ubuntu 20.04.6 LTS (Focal Fossa) |
+| Kernel | Linux 5.4.0-aidlite (arm64) |
+| Node.js | v22.22.2 (installed in `~/.hermes/node/`) |
+| System Python | Python 3.8.10 (default) |
+| Final Python | Python 3.11.15 (managed by uv) |
+| Package Managers | uv 0.11.6, apt, npm |
 
 ---
 
@@ -327,41 +251,6 @@ virtualenv may fail in restricted environments (like some Android/Linux containe
 - [Hermes Agent Official Repository](https://github.com/NousResearch/hermes-agent)
 - [OpenClaw-CN Community](https://openclaw.cn)
 - [AidLux Documentation](https://docs.aidlux.com)
-
----
-
-## 🤝 Contribution Guide
-
-We welcome contributions! Please refer to the official contribution guide for development setup, code style, and PR process.
-
-### Quick Start for Contributors (AidLux Environment)
-
-```bash
-# 1. Clone the repository
-git clone https://github.com/NousResearch/hermes-agent.git
-cd hermes-agent
-
-# 2. Install uv package manager
-curl -LsSf https://astral.sh/uv/install.sh | sh
-
-# 3. AidLux special handling: Install dependencies in target mode
-export UV_LINK_MODE=copy
-mkdir -p ~/.hermes/.deps
-uv pip install --python 3.11 -e ".[all,dev]" --target ~/.hermes/.deps
-
-# 4. Configure environment variables
-export PYTHONPATH="$HOME/.hermes/.deps:$PYTHONPATH"
-
-# 5. Run tests
-python3.11 -m pytest tests/ -q
-```
-
-### Key Adjustment Notes
-
-1. **Skip virtual environment creation**: Virtual environments may fail in AidLux due to permissions or filesystem restrictions, so target mode is used instead
-2. **Use UV_LINK_MODE=copy**: Avoid hard link permission issues
-3. **Specify python3.11**: Ensure the correct Python version is used, avoiding compatibility issues with system Python 3.8
-4. **Configure PYTHONPATH**: Ensure Python can find dependencies installed in ~/.hermes/.deps
 
 ---
 
