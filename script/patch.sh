@@ -34,7 +34,16 @@ echo "✅ Python 依赖安装完成"
 # 3. 安装 Node.js 依赖
 echo "[3/6] 安装 Node.js 依赖 (可能需要几分钟)..."
 cd "$HOME/.hermes/hermes-agent"
-"$HOME/.hermes/node/bin/npm" install
+
+# 检查 npm 文件是否存在
+if [ -f "$HOME/.hermes/node/bin/npm" ]; then
+    echo "    使用本地 Node.js: $HOME/.hermes/node/bin/npm"
+    "$HOME/.hermes/node/bin/npm" install
+else
+    echo "    使用系统 Node.js: npm"
+    "npm" install
+fi
+
 echo "✅ Node.js 依赖安装完成"
 
 # 4. 创建 hermes 软链接到 ~/.local/bin
