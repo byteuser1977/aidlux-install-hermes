@@ -219,6 +219,48 @@ rm -f ~/.local/bin/hermes
 ./aidlinstall.sh
 ```
 
+## 🛠️ PATCH 脚本使用
+
+### 什么是 PATCH 脚本？
+
+`patch.sh` 脚本设计用于修复官方安装后可能出现的问题。它解决了 AidLux 环境中的常见问题，例如：
+
+- 虚拟环境创建失败
+- Python 依赖安装问题
+- Shebang 配置问题
+- 环境变量设置
+
+### 何时使用 PATCH 脚本？
+
+如果遇到以下情况，请使用 PATCH 脚本：
+
+1. 初始安装失败
+2. 遇到 Python 导入错误
+3. `hermes` 命令未找到
+4. 希望确保所有依赖正确安装
+
+### 如何使用 PATCH 脚本
+
+```bash
+# 1. 下载 PATCH 脚本
+curl -fsSL https://raw.githubusercontent.com/byteuser1977/aidlux-install-hermes/main/script/patch.sh | bash
+
+# 2. 应用环境变量
+source ~/.bashrc
+
+# 3. 验证安装
+hermes --version
+```
+
+### PATCH 脚本流程
+
+1. **执行官方 install.sh**：运行官方安装脚本
+2. **修复 Python 依赖**：使用 `UV_LINK_MODE=copy` 的 target 模式
+3. **安装 Node.js 依赖**：安装浏览器工具依赖
+4. **配置 hermes 命令**：创建符号链接并修复 shebang
+5. **设置环境变量**：更新 `~/.bashrc` 中的必要变量
+6. **应用环境变量**：使更改在当前会话中可用
+
 ---
 
 ## 📁 安装后目录结构
@@ -309,13 +351,18 @@ virtualenv 在受限环境（如某些 Android/Linux 容器）中可能因权限
 
 ---
 
-## 📄 Related Documents
+## 📄 相关文档
 
-| Document | Description | Location |
-|----------|-------------|----------|
-| `Installation-Guide.md` | Complete installation guide | `docs/` |
-| `FAQ.md` | Frequently asked questions and solutions | `docs/` |
-| `aidinstall.sh` | One-click installation script | `script/` |
+| 文档 | 描述 | 位置 |
+|------|------|------|
+| `Installation-Guide.md` | 英文安装指南 | `docs/` |
+| `Installation-Guide_CN.md` | 中文安装指南 | `docs/` |
+| `FAQ.md` | 英文常见问题 | `docs/` |
+| `FAQ_CN.md` | 中文常见问题 | `docs/` |
+| `aidinstall.sh` | 一键安装脚本 | `script/` |
+| `patch.sh` | 安装后修复脚本 | `script/` |
+| `PATCH.md` | PATCH 脚本英文文档 | `docs/` |
+| `PATCH_CN.md` | PATCH 脚本中文文档 | `docs/` |
 
 ---
 

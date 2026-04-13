@@ -1038,9 +1038,12 @@ export HERMES_HOME="$HOME/.hermes"
 export PATH="$HOME/.local/bin:$HERMES_HOME/node/bin:$PATH"
 export PYTHONPATH="$HERMES_HOME/hermes-agent:$HERMES_HOME/.deps:$PYTHONPATH"
 EOF_BAZEL
-            log_success "Created ~/.local/bin/env"
+            chmod +x "$HOME/.local/bin/env"
+            log_success "Created ~/.local/bin/env with executable permissions"
         else
-            log_info "~/.local/bin/env already exists"
+            # Ensure existing env file has executable permissions
+            chmod +x "$HOME/.local/bin/env"
+            log_info "~/.local/bin/env already exists, ensuring executable permissions"
         fi
 
         # Ensure ~/.bashrc sources the env file and has PYTHONPATH

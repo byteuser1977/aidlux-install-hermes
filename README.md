@@ -219,6 +219,48 @@ rm -f ~/.local/bin/hermes
 ./aidlinstall.sh
 ```
 
+## 🛠️ PATCH Script Usage
+
+### What is the PATCH script?
+
+The `patch.sh` script is designed to fix issues that may occur after the official installation. It addresses common problems in the AidLux environment, such as:
+
+- Virtual environment creation failures
+- Python dependency installation issues
+- Shebang configuration problems
+- Environment variable setup
+
+### When to use the PATCH script?
+
+Use the PATCH script if:
+
+1. The initial installation failed
+2. You're experiencing Python import errors
+3. The `hermes` command is not found
+4. You want to ensure all dependencies are correctly installed
+
+### How to use the PATCH script
+
+```bash
+# 1. Download the PATCH script
+curl -fsSL https://raw.githubusercontent.com/byteuser1977/aidlux-install-hermes/main/script/patch.sh | bash
+
+# 2. Apply environment variables
+source ~/.bashrc
+
+# 3. Verify installation
+hermes --version
+```
+
+### PATCH script process
+
+1. **Execute official install.sh**: Runs the official installation script
+2. **Fix Python dependencies**: Uses target mode with `UV_LINK_MODE=copy`
+3. **Install Node.js dependencies**: Installs browser tools dependencies
+4. **Configure hermes command**: Creates symlink and fixes shebang
+5. **Set environment variables**: Updates `~/.bashrc` with necessary variables
+6. **Apply environment variables**: Makes changes available in current session
+
 ---
 
 ## 📁 Post-installation Directory Structure
@@ -316,9 +358,12 @@ virtualenv may fail in restricted environments (like some Android/Linux containe
 | `Installation-Guide.md` | Complete installation guide | `docs/` |
 | `FAQ.md` | Frequently asked questions and solutions | `docs/` |
 | `aidinstall.sh` | One-click installation script | `script/` |
+| `patch.sh` | Post-installation fix script | `script/` |
 | `README_CN.md` | Chinese version of this document | `./` |
 | `Installation-Guide_CN.md` | Chinese installation guide | `docs/` |
 | `FAQ_CN.md` | Chinese FAQ | `docs/` |
+| `PATCH.md` | PATCH script documentation | `docs/` |
+| `PATCH_CN.md` | Chinese PATCH script documentation | `docs/` |
 
 ---
 
