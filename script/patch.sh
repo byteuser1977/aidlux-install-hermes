@@ -14,7 +14,7 @@ echo ""
 
 # 1. 执行官方安装脚本
 echo "[1/6] 手工执行官方 install.sh..."
-ccho "curl -fsSL https://raw.githubusercontent.com/NousResearch/hermes-agent/main/scripts/install.sh | bash"
+echo "curl -fsSL https://raw.githubusercontent.com/NousResearch/hermes-agent/main/scripts/install.sh | bash"
 
 # 等待安装完成
 sleep 2
