@@ -833,7 +833,7 @@ install_deps() {
         else
             log_warn "requirements.txt not found, skipping target installation"
         fi
-        log_success "AidLux dependency installation completed"
+        log_success "AidLux dependency installation completed (using source hermes script)"
         return 0
     fi
 
@@ -944,36 +944,51 @@ install_deps() {
 setup_path() {
     log_info "Setting up hermes command..."
 
-    if [ "$USE_VENV" = true ]; then
+    # Determine hermes executable location
+    if [ "$USE_VENV" = true ] && [ -x "$INSTALL_DIR/venv/bin/hermes" ]; then
         HERMES_BIN="$INSTALL_DIR/venv/bin/hermes"
+    elif [ -x "$INSTALL_DIR/hermes" ]; then
+        # AidLux mode: use the source hermes script directly
+        HERMES_BIN="$INSTALL_DIR/hermes"
     else
+        # Fallback: search in PATH
         HERMES_BIN="$(which hermes 2>/dev/null || echo "")"
         if [ -z "$HERMES_BIN" ]; then
-            log_warn "hermes not found on PATH after install"
+            log_warn "hermes executable not found"
+            log_info "Expected locations:"
+            log_info "  - $INSTALL_DIR/hermes (source script)"
+            log_info "  - ~/.local/bin/hermes (symlink)"
+            log_info "  - \$PATH (which hermes)"
+            log_info "Skipping hermes command setup"
             return 0
         fi
     fi
 
-    # Verify the entry point script was actually generated
+    log_success "Found hermes at: $HERMES_BIN"
+
+    # Verify the entry point script is executable
     if [ ! -x "$HERMES_BIN" ]; then
-        log_warn "hermes entry point not found at $HERMES_BIN"
-        log_info "This usually means the pip install didn't complete successfully."
-        if [ "$DISTRO" = "termux" ]; then
-            log_info "Try: cd $INSTALL_DIR && python -m pip install -e '.[termux]' -c constraints-termux.txt"
-        else
-            log_info "Try: cd $INSTALL_DIR && uv pip install -e '.[all]'"
-        fi
-        return 0
+        log_warn "hermes is not executable: $HERMES_BIN"
+        log_info "Attempting to fix permissions..."
+        chmod +x "$HERMES_BIN" || {
+            log_error "Cannot make hermes executable"
+            return 0
+        }
     fi
 
     local command_link_dir
     local command_link_display_dir
     command_link_dir="$(get_command_link_dir)"
     command_link_display_dir="$(get_command_link_display_dir)"
+    # First, ensure the source hermes script is self-contained (AidLux/termux)
+    if is_aidlux || [ "$DISTRO" = "termux" ]; then
+        fix_shebangs "$INSTALL_DIR/hermes"
+    fi
 
-    # Create a user-facing shim for the hermes command.
+    # Create a user-facing symlink for the hermes command.
     mkdir -p "$command_link_dir"
-    ln -sf "$HERMES_BIN" "$command_link_dir/hermes"
+    rm -f "$command_link_dir/hermes"
+    ln -s "$INSTALL_DIR/hermes" "$command_link_dir/hermes"
     log_success "Symlinked hermes → $command_link_display_dir/hermes"
 
     if [ "$DISTRO" = "termux" ]; then
@@ -1005,27 +1020,57 @@ setup_path() {
                 ;;
             *)
                 [ -f "$HOME/.bashrc" ] && SHELL_CONFIGS+=("$HOME/.bashrc")
-                [ -f "$HOME/.zshrc" ] && SHELL_CONFIGS+=("$HOME/.zshrc")
+                [ -f "$HOME/.zshrc" ] && SHELL_CONFIGS+=("$ HOME/.zshrc")
                 ;;
         esac
         # Also ensure ~/.profile has it (sourced by login shells on
         # Ubuntu/Debian/WSL even when ~/.bashrc is skipped)
         [ -f "$HOME/.profile" ] && SHELL_CONFIGS+=("$HOME/.profile")
 
+        # Create ~/.local/bin/env file for Hermes-specific environment
+        mkdir -p "$HOME/.local/bin"
+        if [ ! -f "$HOME/.local/bin/env" ]; then
+            cat > "$HOME/.local/bin/env" << 'EOF_BAZEL'
+# Hermes Agent environment configuration
+# This file is sourced by ~/.bashrc
+
+export HERMES_HOME="$HOME/.hermes"
+export PATH="$HOME/.local/bin:$HERMES_HOME/node/bin:$PATH"
+export PYTHONPATH="$HERMES_HOME/hermes-agent:$HERMES_HOME/.deps:$PYTHONPATH"
+EOF_BAZEL
+            log_success "Created ~/.local/bin/env"
+        else
+            log_info "~/.local/bin/env already exists"
+        fi
+
+        # Ensure ~/.bashrc sources the env file and has PYTHONPATH
+        if [ -f "$HOME/.bashrc" ]; then
+            # Add sourcing of env file if not already present
+            if ! grep -q '\. "$HOME/.local/bin/env"' "$HOME/.bashrc" 2>/dev/null; then
+                echo "" >> "$HOME/.bashrc"
+                echo "# Load Hermes Agent environment" >> "$HOME/.bashrc"
+                echo ". \"$HOME/.local/bin/env\"" >> "$HOME/.bashrc"
+                log_success "Added ~/.local/bin/env sourcing to ~/.bashrc"
+            fi
+        fi
+
         PATH_LINE='export PATH="$HOME/.local/bin:$PATH"'
+        ENV_LINE='. "$HOME/.local/bin/env"'
 
         for SHELL_CONFIG in "${SHELL_CONFIGS[@]}"; do
-            if ! grep -v '^[[:space:]]*#' "$SHELL_CONFIG" 2>/dev/null | grep -qE 'PATH=.*\.local/bin'; then
+            # Add env sourcing if not present
+            if ! grep -Fq "$ENV_LINE" "$SHELL_CONFIG" 2>/dev/null; then
                 echo "" >> "$SHELL_CONFIG"
-                echo "# Hermes Agent — ensure ~/.local/bin is on PATH" >> "$SHELL_CONFIG"
-                echo "$PATH_LINE" >> "$SHELL_CONFIG"
-                log_success "Added ~/.local/bin to PATH in $SHELL_CONFIG"
+                echo "# Load Hermes Agent environment" >> "$SHELL_CONFIG"
+                echo "$ENV_LINE" >> "$SHELL_CONFIG"
+                log_success "Added env sourcing to $SHELL_CONFIG"
             fi
         done
 
+        # Info message if no shell config found
         if [ ${#SHELL_CONFIGS[@]} -eq 0 ]; then
-            log_warn "Could not detect shell config file to add ~/.local/bin to PATH"
-            log_info "Add manually: $PATH_LINE"
+            log_warn "Could not detect shell config file to add env sourcing"
+            log_info "Add manually to ~/.bashrc: $ENV_LINE"
         fi
     else
         log_info "~/.local/bin already on PATH"
@@ -1039,32 +1084,79 @@ setup_path() {
 
 # AidLux special handling functions
 fix_shebangs() {
-    log_info "AidLux: fixing script shebang..."
-    local hermes_script="$INSTALL_DIR/hermes"
-    if [ -f "$hermes_script" ]; then
-        if head -1 "$hermes_script" | grep -q "^#!.*python3"; then
-            sed -i '1s|^#!.*python3.*$|#!/usr/bin/env python3.11|' "$hermes_script"
-            log_success "Updated $hermes_script shebang to python3.11"
-        else
-            log_warn "Shebang is not standard python3 format, skipping modification"
-        fi
-    else
+    local hermes_script="${1:-$INSTALL_DIR/hermes}"
+    log_info "AidLux: preparing self-contained hermes script: $hermes_script"
+    if [ ! -f "$hermes_script" ]; then
         log_warn "Hermes script not found: $hermes_script"
+        return 0
     fi
+
+    # Replace entire file with self-contained version that:
+    # 1. Uses python3.11 shebang
+    # 2. Sets HERMES_HOME environment
+    # 3. Adds hermes-agent and .deps to sys.path
+    cat > "$hermes_script" << 'HERMES_EOF'
+#!/usr/bin/env python3.11
+"""
+Hermes Agent CLI launcher (AidLux self-contained version).
+
+This wrapper sets up the Python path automatically so you can run it
+directly without needing to source ~/.bashrc first.
+"""
+
+import os
+import sys
+
+# Set Hermes environment
+os.environ.setdefault('HERMES_HOME', os.path.expanduser('~/.hermes'))
+
+# Add paths to sys.path to ensure dependencies are found
+HERMES_AGENT = os.path.expanduser('~/.hermes/hermes-agent')
+HERMES_DEPS = os.path.expanduser('~/.hermes/.deps')
+
+# Prepend to sys.path if not already there
+if HERMES_AGENT not in sys.path:
+    sys.path.insert(0, HERMES_AGENT)
+if HERMES_DEPS not in sys.path:
+    sys.path.insert(1 if HERMES_AGENT in sys.path else 0, HERMES_DEPS)
+
+if __name__ == "__main__":
+    from hermes_cli.main import main
+    main()
+HERMES_EOF
+
+    chmod +x "$hermes_script"
+    log_success "Updated $hermes_script with self-contained version (python3.11)"
 }
 
 configure_pythonpath() {
     log_info "AidLux: configuring PYTHONPATH..."
-    local py_path_line="export PYTHONPATH=\"$HERMES_HOME/.deps:$PYTHONPATH\""
+
+    # Both .deps (third-party) and hermes-agent (source modules) needed
+    local py_path_line='export PYTHONPATH="$HERMES_HOME/hermes-agent:$HERMES_HOME/.deps:$PYTHONPATH"'
+
+    # Add to ~/.local/bin/env if it exists (preferred location)
+    if [ -f "$HOME/.local/bin/env" ]; then
+        if ! grep -q 'PYTHONPATH.*hermes-agent' "$HOME/.local/bin/env"; then
+            echo "" >> "$HOME/.local/bin/env"
+            echo "# Ensure source and .deps on PYTHONPATH" >> "$HOME/.local/bin/env"
+            echo "$py_path_line" >> "$HOME/.local/bin/env"
+            log_success "Added PYTHONPATH to ~/.local/bin/env"
+        fi
+    fi
+
+    # Also add to ~/.bashrc if env file sourcing is not already there
     if [ -f "$HOME/.bashrc" ]; then
-        if ! grep -q 'HERMES_HOME/.deps' "$HOME/.bashrc"; then
+        if ! grep -q 'PYTHONPATH.*hermes-agent' "$HOME/.bashrc"; then
             echo "" >> "$HOME/.bashrc"
-            echo "# AidLux Hermes Agent - ensure .deps on PYTHONPATH" >> "$HOME/.bashrc"
+            echo "# AidLux Hermes Agent - ensure source and .deps on PYTHONPATH" >> "$HOME/.bashrc"
             echo "$py_path_line" >> "$HOME/.bashrc"
             log_success "Added PYTHONPATH to ~/.bashrc"
         fi
     fi
-    export PYTHONPATH="$HERMES_HOME/.deps:$PYTHONPATH"
+
+    # Set for current session immediately
+    export PYTHONPATH="$HERMES_HOME/hermes-agent:$HERMES_HOME/.deps:$PYTHONPATH"
     log_success "PYTHONPATH set for current session"
 }
 copy_config_templates() {
@@ -1077,17 +1169,13 @@ copy_config_templates() {
     if [ ! -f "$HERMES_HOME/.env" ]; then
         if [ -f "$INSTALL_DIR/.env.example" ]; then
             cp "$INSTALL_DIR/.env.example" "$HERMES_HOME/.env"
-            chmod +x "$HERMES_HOME/.env"
-            log_success "Created ~/.hermes/.env from template with executable permissions"
+            log_success "Created ~/.hermes/.env from template"
         else
             touch "$HERMES_HOME/.env"
-            chmod +x "$HERMES_HOME/.env"
-            log_success "Created ~/.hermes/.env with executable permissions"
+            log_success "Created ~/.hermes/.env"
         fi
     else
-        # Ensure existing .env has executable permissions
-        chmod +x "$HERMES_HOME/.env"
-        log_info "~/.hermes/.env already exists, ensuring executable permissions"
+        log_info "~/.hermes/.env already exists, keeping it"
     fi
 
     # Create config.yaml at ~/.hermes/config.yaml (top level, easy to find)
@@ -1248,12 +1336,22 @@ run_setup_wizard() {
 
     cd "$INSTALL_DIR"
 
-    # Run hermes setup using the venv Python directly (no activation needed).
+    # Run hermes setup using the correct Python version.
+    # AidLux: always use python3.11 (system default is 3.8)
     # Redirect stdin from /dev/tty so interactive prompts work when piped from curl.
-    if [ "$USE_VENV" = true ]; then
+    if [ "$USE_VENV" = true ] && [ -x "$INSTALL_DIR/venv/bin/python" ]; then
         "$INSTALL_DIR/venv/bin/python" -m hermes_cli.main setup < /dev/tty
     else
-        python -m hermes_cli.main setup < /dev/tty
+        # Use python3.11 explicitly on AidLux (system python is too old)
+        if command -v python3.11 &>/dev/null; then
+            python3.11 -m hermes_cli.main setup < /dev/tty
+        elif [ -x "$HOME/.local/bin/python3.11" ]; then
+            "$HOME/.local/bin/python3.11" -m hermes_cli.main setup < /dev/tty
+        else
+            log_error "Python 3.11 not found. Cannot run setup wizard."
+            log_info "Install Python 3.11 or run manually later: hermes setup"
+            return 1
+        fi
     fi
 }
 
@@ -1467,6 +1565,7 @@ main() {
     install_deps
     install_node_deps
     setup_path
+    configure_pythonpath
     copy_config_templates
     run_setup_wizard
     maybe_start_gateway
